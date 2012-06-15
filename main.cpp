@@ -5,22 +5,26 @@
  *      Author: Luke
  */
 
-//#include <avr/io.h>
+#include <avr/io.h>
 #include "snuffie.h"
 
-int main(){
-	snuffie autko;
-	//Snuffie.init();
-	SBI(DDRD,7);
-	while(1){
-		//Snuffie.led_on();
-		SBI(PORTD,7);
-		_delay_ms(400);
-		//Snuffie.led_off();
-		CBI(PORTD,7);
-		_delay_ms(400);
-	}
-	return 0;
+/*
+ * SENSORS
+ * PA0..7 PC7..0
+ */
+
+snuffie Snuffie; //don't know how to change data from interrupt -> made this global variable
+
+ISR(INT0_vect){
+	SBI(PORTD,7);
+}
+ISR(INT1_vect){
+	SBI(PORTD,6);
 }
 
+int main(){
+	while(1){
+	}
 
+	return 0;
+}
