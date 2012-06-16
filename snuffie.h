@@ -28,6 +28,9 @@ private:
 public:
 	snuffie();
 	volatile int flaga;
+	volatile bool sensors[16];
+
+	int eng1, eng2;
 
 	void wait();
 

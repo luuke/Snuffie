@@ -5,6 +5,12 @@
  *      Author: Luke
  */
 
+/*
+ * FUSE BITS
+ * low: 0xFF
+ * high: 0x89
+ * ext: 0xFF
+ */
 
 /*
  * INT0 -> toggle allow flag
@@ -65,20 +71,63 @@ snuffie::snuffie(){
 	 *		WGM12, WGM13 = 0;
 	 *
 	 *	TB6612FNG H-Bridge max PWM frequency = 100kHz
-	 *	While writing this code CPU clock is 1MHz.
-	 *	16MHz external oscillator prepared to use.
-	 *	Will change later.
-	 *	Because of it I use 256 prescaler (16Mhz/256=62.5kHz 1MHz/256=3906Hz)
-	 *	instead of 64 prescaler (>>>16MHz/64=250kHz<<< 1MHz/64=15625MHz).
+	 *	Using external oscillator 16MHz.
+	 *	256 prescaler (16Mhz/256=62.5kHz 1MHz/256=3906Hz)
+	 *	64 prescaler (>>>16MHz/64=250kHz<<< 1MHz/64=15625MHz).
 	 *	clkI/O/256 (From prescaler):
 	 *		CS12 = 1
 	 *		CS11, CS10 = 0
 	 *
 	 *	Input Capture not used!
 	 *		ICNC1, ICES1 = 0
+	 *
+	 *		TIMSK register:
+	 *
+	 *	PWM Timer1 Overflow interrupt enable
+	 *		TOIE1 = 1;
+	 *
+	 *	Engines stop
+	 *		OCR1A, OCR1B = 0
 	 */
 	TCCR1A |= (1<<COM1A1) | (1<<COM1B1) | (1<<WGM10) | (1<<WGM11);
 	TCCR1B |= (1<<CS12);
+	TIMSK |= (1<<TOIE1);
+	OCR1A = 0;
+	OCR1B = 0;
+
+	/*
+	 *		Sensors init
+	 *	Sensors read in Timer2 overflow interrupt
+	 *
+	 *		TCCR2 register:
+	 *
+	 *	CTC mode
+	 *		WGM21 = 1
+	 *		WGM20 = 0
+	 *
+	 *	Normal port operation, OC2 disconnected
+	 *		COM21, COM20 = 0
+	 *
+	 *	Frequency equation:
+	 *	fOC2 = fclk_I/O / 2 / N / (1 + OCR2)
+	 *	Sensor scan period ~5ms = 200Hz
+	 *	fclk_I/O = 16MHz
+	 *	prescaler N = 256
+	 *	OCR2 = 155
+	 *	fOC2 -> 200.32Hz
+	 *
+	 *	Prescaler N = 256
+	 *		CS22 = 1
+	 *		CS21, CS20 = 0
+	 *
+	 *		TIMSK register:
+	 *
+	 *	Timer2 Output Compare Match interrupt enable
+	 *		OCIE2 = 1
+	 */
+	TCCR2 |= (1<<WGM21) | (1<<CS22);
+	TIMSK |= (1<<OCIE2);
+	OCR2 = 155;
 
 	/*
 	 * temp variable init
@@ -99,8 +148,6 @@ snuffie::snuffie(){
 void snuffie::wait(){
 	PORTB = 0b11110001;
 	while(1){
-		OCR1A = 1023;
-		OCR1B = 1023;
 
 	}
 }
