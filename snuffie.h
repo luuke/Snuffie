@@ -24,16 +24,21 @@
 
 class snuffie{
 private:
+	volatile uint8_t sensor_status[16];
+	int8_t factor[16];
+	uint16_t motor_left, motor_right;
+	uint16_t reg_P, reg_I, reg_D;
 
 public:
+	uint8_t enable;
+
 	snuffie();
-	volatile int flaga;
-	volatile bool sensors[16];
-
-	int eng1, eng2;
-
 	void wait();
 
+	void sensors_scan(); //OK
+	void calculate_speed();
+	void set_speed();
+	void test();
 };
 
 #endif /* SNUFFIE_H_ */
