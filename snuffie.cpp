@@ -24,7 +24,7 @@
 #define LED2 6 //Green center LED
 #define LED1 5 //Green edge LED
 
-#define POWER 2
+#define POWER 1
 
 snuffie::snuffie(){
 	/*
@@ -144,7 +144,7 @@ snuffie::snuffie(){
 	 * 		PID regulator values set
 	 * 	reg_P >= 1
 	 */
-	this->reg_P = 150;
+	this->reg_P = 200;
 
 	/*
 	 * Global Interrupt Flag in SREG register set
@@ -172,33 +172,21 @@ void snuffie::sensors_scan(){
 	}
 	for(int i=0;i<16;i++){
 		if(this->sensor_status[i] == 0) continue;
-		else return;
+		else{
+			//this->if_see = 1;
+			return;
+		}
 	}
+	//this->if_see = 0;
 	this->enable = 0;
 }
 
 void snuffie::calculate_speed(){
-	uint16_t temp = 0;
-	uint8_t counter = 0;
-	for(uint8_t i=0; i<16; i++){
-		temp += this->sensor_status[i] * this->factor[i];
-		if(this->sensor_status[i] == 1) counter++;
-	}
-	temp /= counter;
-	temp *= this->reg_P;
 
-	this->motor_left = 1023 + temp;
-	if(this->motor_left > 1023) this->motor_left = 1023;
-	else if(this->motor_left < 0) this->motor_left = 0;
-
-	this->motor_right = 1023 - temp;
-	if(this->motor_right > 1023) this->motor_right = 1023;
-	else if(this->motor_right < 0) this->motor_right = 0;
 }
 
-void snuffie::set_speed(){
-	OCR1A = this->motor_left / POWER * this->enable;
-	OCR1B = this->motor_right / POWER * this->enable;
+void snuffie::set_speed(int8_t dir_left_temp, int8_t dir_right_temp){
+
 }
 
 void snuffie::test(){

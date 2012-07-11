@@ -28,6 +28,9 @@ private:
 	int8_t factor[16];
 	uint16_t motor_left, motor_right;
 	uint16_t reg_P, reg_I, reg_D;
+	int8_t dir_left, dir_right; //need init!
+	int16_t last_scan;
+	uint8_t if_see;
 
 public:
 	uint8_t enable;
@@ -37,7 +40,7 @@ public:
 
 	void sensors_scan(); //OK
 	void calculate_speed();
-	void set_speed();
+	void set_speed(int8_t dir_left_temp = 1, int8_t dir_right_temp = 1);
 	void test();
 };
 
