@@ -19,28 +19,46 @@
 #define TBI(reg,bit) reg^=1<<bit //toggle bit
 #define CHBI(reg,bit) reg&(1<<bit) //check bit
 
+/*
+ * direction defines
+ */
+#define FORWARD 2
+#define STOP 1
+#define BACKWARD 0
+
+/*
+ * sensor status defines
+ */
+#define SEE 1
+#define NSEE 0
+
+/*
+ * engine power define
+ */
+#define HALF_POWER 1
+#define QUARTER_POWER 0
+
 #ifndef SNUFFIE_H_
 #define SNUFFIE_H_
 
 class snuffie{
 private:
-	volatile uint8_t sensor_status[16];
+	volatile uint8_t sensor_status[16]; //TODO: change for 16bit bitfield -> easier to detect many unique cases by value of variable
 	int8_t factor[16];
-	uint16_t motor_left, motor_right;
-	uint16_t reg_P, reg_I, reg_D;
-	int8_t dir_left, dir_right; //need init!
-	int16_t last_scan;
-	uint8_t if_see;
-
+	uint8_t left_motor_dir, right_motor_dir;
+	int16_t left_motor_speed, right_motor_speed;
+	int16_t PID_error, PID_output;
+	uint8_t PIDreg_P;
 public:
-	uint8_t enable;
-
 	snuffie();
+
 	void wait();
 
-	void sensors_scan(); //OK
-	void calculate_speed();
-	void set_speed(int8_t dir_left_temp = 1, int8_t dir_right_temp = 1);
+	void sensors_scan(); //ready
+	void calculate_error(); //ready?
+	void calculate_speed(); //ready?
+	void set_motor_speed(); //ready
+
 	void test();
 };
 
