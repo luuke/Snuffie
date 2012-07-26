@@ -1,0 +1,5 @@
+- add remembering old sensor status in case of losing the line
+- think of making more variables as volatile
+
+- for final version code size reducing and speed optimizing read 'AVR035 Efficient C Coding for AVR' PDF file.
+- volatile uint8_t sensor_status[16]; //TODO: change for 16bit bitfield -> easier to detect many unique cases by value of variable

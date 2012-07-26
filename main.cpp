@@ -16,14 +16,19 @@
 snuffie Snuffie; //don't know how to change data from interrupt -> made this global variable
 
 ISR(INT0_vect){
-	Snuffie.enable = 0;
+	SBI(PORTD,7);
+	PORTB |= 0b10000000;
 }
 ISR(INT1_vect){
-	Snuffie.enable = 1;
+	CBI(PORTD,7);
+	PORTB &= 0b01111111;
 }
 ISR(TIMER1_OVF_vect){
+	Snuffie.calculate_error();
 	Snuffie.calculate_speed();
-	Snuffie.set_speed();
+	Snuffie.set_motor_speed();
+	//OCR1A = 1023;
+	//OCR1B = 1023;
 }
 ISR(TIMER2_COMP_vect){
 	Snuffie.sensors_scan();

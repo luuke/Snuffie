@@ -18,13 +18,18 @@
  * INT0 -> setting ON/OFF all functions (sensors check freq timer, PWM itd.)
  */
 
+/*
+ * What have any influence on robot's ride quality?
+ * - sensors scan frequency
+ * - PID regulator values
+ *
+ */
+
 #include "snuffie.h"
 
 #define LED3 7 //Red LED
 #define LED2 6 //Green center LED
 #define LED1 5 //Green edge LED
-
-#define POWER 1
 
 snuffie::snuffie(){
 	/*
@@ -90,6 +95,9 @@ snuffie::snuffie(){
 	 *
 	 *	Engines stop
 	 *		OCR1A, OCR1B = 0
+	 *
+	 *		OCR1A - left motor
+	 *		OCR1B - right motor
 	 */
 	TCCR1A |= (1<<COM1A1) | (1<<COM1B1) | (1<<WGM10) | (1<<WGM11);
 	TCCR1B |= (1<<CS12);
@@ -129,22 +137,25 @@ snuffie::snuffie(){
 	 */
 	TCCR2 |= (1<<WGM21) | (1<<CS22);
 	TIMSK |= (1<<OCIE2);
-	OCR2 = 155;
+	OCR2 = 155; //add here something to easy change scan freq
 
 	/*
 	 *		Sensors factors init
 	 *	|-7|-6|-5|-4|-3|-2|-1|0|0|+1|+2|+3|+4|+5|+6|+7|
 	 */
 	for(int i=0;i<8;i++){
-		this->factor[i] = (7-i)*-1;
-		this->factor[8+i] = i;
+		factor[i] = (-7+i);
+		factor[8+i] = i;
 	}
+
+	factor[0] = -20; //temp
+	factor[15] = 20; //temp
 
 	/*
 	 * 		PID regulator values set
-	 * 	reg_P >= 1
+	 * 	PID_P >= 1
 	 */
-	this->reg_P = 200;
+	PIDreg_P = 35;
 
 	/*
 	 * Global Interrupt Flag in SREG register set
@@ -152,41 +163,157 @@ snuffie::snuffie(){
 	sei();
 
 	/*
+	 *
+	 * PORTB description
+	 * PB0 - AIN2
+	 * PB1 - SCK
+	 * PB2 - AIN1
+	 * PB3 - BIN1
+	 * PB4 - BIN2
+	 * PB5 - PWMA
+	 * PB6 - PWMB
+	 * PB7 - /STBY
+	 *
+	 *		Motors directions init
+	 * |------|------|-----------|
+	 * |      LEFT ENGINE        |
+	 * |------|------|-----------|
+	 * | AIN1 | AIN2 | direction |
+	 * |------|------|-----------|
+	 * |  0   |  0   | STOP      |
+	 * |  1   |  0   | BACKWARD  |
+	 * |  0   |  1   | FORWARD   |
+	 * |  1   |  1   | BRAKE     |
+	 * |------|------|-----------|
+	 * |      RIGHT ENGINE       |
+	 * |------|------|-----------|
+	 * | BIN1 | BIN2 | direction |
+	 * |------|------|-----------|
+	 * |  0   |  0   | STOP      |
+	 * |  1   |  0   | BACKWARD  |
+	 * |  0   |  1   | FORWARD   |
+	 * |  1   |  1   | BRAKE     |
+	 * |------|------|-----------|
+	 *
+	 * Both engines FORWARD init
+	 * 		AIN2, BIN2 = 1
+	 * 		AIN1, BIN1 = 0
+	 *
+	 * H-Bridge standby (off)
+	 * 		PB7 = 0
+	 */
+	PORTB = 0b00010001;
+	left_motor_dir = FORWARD;
+	right_motor_dir = FORWARD;
+
+	/*
 	 * Wait for action after completing init
 	 */
-	this->enable = 0;
 	wait();
 }
 
 void snuffie::wait(){
-	PORTB = 0b11110001;
 	while(1){
 
 	}
 }
 
 void snuffie::sensors_scan(){
-	for(int i=0;i<8;i++){
-		this->sensor_status[i] = ((CHBI(PINA,i)) && 1);
-		this->sensor_status[8+i] = ((CHBI(PINC,(7-i))) && 1);
+	for(int i=0; i<8; i++){
+		sensor_status[i] = CHBI(PINA,i);
+		sensor_status[15-i] = CHBI(PINC,i);
 	}
-	for(int i=0;i<16;i++){
-		if(this->sensor_status[i] == 0) continue;
-		else{
-			//this->if_see = 1;
-			return;
+}
+
+void snuffie::calculate_error(){
+	PID_error = 0;
+	//uint8_t counter = 0;
+	for(int i=0; i<16; i++){
+		if(sensor_status[i] != 0){
+			PID_error += factor[i];
+			//HERE CAN ADD HOW MANY SENSORS SEE LINE
+			//counter++;
 		}
 	}
-	//this->if_see = 0;
-	this->enable = 0;
+	//PID_error /= counter;
 }
 
 void snuffie::calculate_speed(){
+	int16_t PID_output = 0;
 
+	//P
+	PID_output += PIDreg_P * PID_error;
+	//I
+
+	//D
+
+	//output
+	left_motor_speed = 1023 + PID_output;
+	right_motor_speed = 1023 - PID_output;
+#if HALF_POWER
+	left_motor_speed = (left_motor_speed>>1);
+	right_motor_speed = (right_motor_speed>>1);
+#endif //HALF_POWER
+#if QUARTER_POWER
+	left_motor_speed = (left_motor_speed>>2);
+	right_motor_speed = (right_motor_speed>>2);
+#endif //QUARTER_POWER
 }
 
-void snuffie::set_speed(int8_t dir_left_temp, int8_t dir_right_temp){
+void snuffie::set_motor_speed(){
+	uint16_t temp;
+	uint8_t new_left_dir, new_right_dir;
 
+	//Setting speed
+	if((left_motor_speed < 1024) && (left_motor_speed >= 0) && (right_motor_speed < 1024) && (right_motor_speed >= 0)){
+		OCR1A = left_motor_speed;
+		OCR1B = right_motor_speed;
+		new_left_dir = FORWARD;
+		new_right_dir = FORWARD;
+	}
+	else if(left_motor_speed >= 1024){
+		SBI(PORTD,6);
+		temp = left_motor_speed - 1023;
+		left_motor_speed = 1023;
+		new_left_dir = FORWARD;
+		right_motor_speed -= temp;
+		if(right_motor_speed >= 0) new_right_dir = FORWARD;
+		else if(right_motor_speed >= -1023){
+			right_motor_speed = (-1)*right_motor_speed;
+			new_right_dir = BACKWARD;
+		}
+		else{
+			right_motor_speed = 1023;
+			new_right_dir = BACKWARD;
+		}
+	}
+	else if(right_motor_speed >= 1024){
+		SBI(PORTD,5);
+		temp = right_motor_speed - 1023;
+		right_motor_speed = 1023;
+		new_right_dir = FORWARD;
+		left_motor_speed -= temp;
+		if(left_motor_speed >= 0) new_left_dir = FORWARD;
+		else if(left_motor_speed >= -1023){
+			left_motor_speed = (-1)*left_motor_speed;
+			new_left_dir = BACKWARD;
+		}
+		else{
+			left_motor_speed = 1023;
+			new_left_dir = BACKWARD;
+		}
+	}
+	//else SBI(PORTD,5);
+
+	//Setting direction
+	if(left_motor_dir != new_left_dir){
+		PORTB ^= 0b00011000;
+		left_motor_dir = new_left_dir;
+	}
+	if(right_motor_dir != new_right_dir){
+		PORTB ^= 0b00000101;
+		left_motor_dir = new_right_dir;
+	}
 }
 
 void snuffie::test(){
