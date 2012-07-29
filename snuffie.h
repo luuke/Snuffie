@@ -49,14 +49,15 @@ private:
 	int16_t left_motor_speed, right_motor_speed;
 	int16_t PID_error, PID_output;
 	uint8_t PIDreg_P;
+	uint8_t speed_mode;
 public:
 	snuffie();
 
 	void wait();
 
 	void sensors_scan(); //ready
-	void calculate_error(); //ready?
-	void calculate_speed(); //ready?
+	void calculate_error(); //ready
+	void calculate_speed(); //wrong, rewrite this shit!
 	void set_motor_speed(); //ready
 
 	void test();

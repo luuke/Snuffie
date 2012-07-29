@@ -250,6 +250,60 @@ void snuffie::calculate_speed(){
 	//output
 	left_motor_speed = 1023 + PID_output;
 	right_motor_speed = 1023 - PID_output;
+
+	//setting speed mode
+	if(left_motor_speed > 1023){
+		if(right_motor_speed >= 0){
+			speed_mode = 1;
+		}
+		else if(right_motor_speed >= -1023){
+			speed_mode = 2;
+		}
+		else if(right_motor_speed < -1023){
+			speed_mode = 3;
+		}
+	}
+	else if(left_motor_speed >= 0){
+		if(right_motor_speed > 1023){
+			speed_mode = 4;
+		}
+		else if(right_motor_speed >= 0){
+			speed_mode = 5;
+		}
+		else if(right_motor_speed >= -1023){
+			speed_mode = 6;
+		}
+		else if(right_motor_speed < -1023){
+			speed_mode = 7;
+		}
+	}
+	else if(left_motor_speed >= -1023){
+		if(right_motor_speed > 1023){
+			speed_mode = 8;
+		}
+		else if(right_motor_speed >= 0){
+			speed_mode = 9;
+		}
+		else if(right_motor_speed >= -1023){
+			speed_mode = 10;
+		}
+		else if(right_motor_speed < -1023){
+			speed_mode = 11;
+		}
+	}
+	else if(left_motor_speed < -1023){ //need 'else if'? maybe 'if' only?
+		if(right_motor_speed > 1023){
+			speed_mode = 12;
+		}
+		else if(right_motor_speed >= 0){
+			speed_mode = 13;
+		}
+		else if(right_motor_speed >= -1023){
+			speed_mode = 14;
+		}
+	}
+
+
 #if HALF_POWER
 	left_motor_speed = (left_motor_speed>>1);
 	right_motor_speed = (right_motor_speed>>1);
@@ -265,47 +319,52 @@ void snuffie::set_motor_speed(){
 	uint8_t new_left_dir, new_right_dir;
 
 	//Setting speed
-	if((left_motor_speed < 1024) && (left_motor_speed >= 0) && (right_motor_speed < 1024) && (right_motor_speed >= 0)){
-		OCR1A = left_motor_speed;
-		OCR1B = right_motor_speed;
-		new_left_dir = FORWARD;
-		new_right_dir = FORWARD;
-	}
-	else if(left_motor_speed >= 1024){
-		SBI(PORTD,6);
-		temp = left_motor_speed - 1023;
-		left_motor_speed = 1023;
-		new_left_dir = FORWARD;
-		right_motor_speed -= temp;
-		if(right_motor_speed >= 0) new_right_dir = FORWARD;
-		else if(right_motor_speed >= -1023){
-			right_motor_speed = (-1)*right_motor_speed;
-			new_right_dir = BACKWARD;
-		}
-		else{
-			right_motor_speed = 1023;
-			new_right_dir = BACKWARD;
-		}
-	}
-	else if(right_motor_speed >= 1024){
-		SBI(PORTD,5);
-		temp = right_motor_speed - 1023;
-		right_motor_speed = 1023;
-		new_right_dir = FORWARD;
-		left_motor_speed -= temp;
-		if(left_motor_speed >= 0) new_left_dir = FORWARD;
-		else if(left_motor_speed >= -1023){
-			left_motor_speed = (-1)*left_motor_speed;
-			new_left_dir = BACKWARD;
-		}
-		else{
-			left_motor_speed = 1023;
-			new_left_dir = BACKWARD;
-		}
-	}
-	//else SBI(PORTD,5);
+	switch(speed_mode){
+	case 1:
 
-	//Setting direction
+		break;
+	case 2:
+
+		break;
+	case 3:
+
+		break;
+	case 4:
+
+		break;
+	case 5:
+
+		break;
+	case 6:
+
+		break;
+	case 7:
+
+		break;
+	case 8:
+
+		break;
+	case 9:
+
+		break;
+	case 10:
+
+		break;
+	case 11:
+
+		break;
+	case 12:
+
+		break;
+	case 13:
+
+		break;
+	case 14:
+
+		break;
+	}
+
+	//Setting direction        FREE TRASH!
 	if(left_motor_dir != new_left_dir){
 		PORTB ^= 0b00011000;
 		left_motor_dir = new_left_dir;
