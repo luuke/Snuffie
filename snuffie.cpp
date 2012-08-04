@@ -22,6 +22,7 @@
  * What have any influence on robot's ride quality?
  * - sensors scan frequency
  * - PID regulator values
+ * - sensors factors
  *
  */
 
@@ -32,6 +33,15 @@
 #define LED1 5 //Green edge LED
 
 snuffie::snuffie(){
+	name[0] = 'S';
+	name[1] = 'n';
+	name[2] = 'u';
+	name[3] = 'f';
+	name[4] = 'f';
+	name[5] = 'i';
+	name[6] = 'e';
+	name[7] = '\0';
+
 	/*
 	 * 		I/O init
 	 * Inputs:
@@ -106,7 +116,7 @@ snuffie::snuffie(){
 	OCR1B = 0;
 
 	/*
-	 *		Sensors init
+	 *		Sensors init (NEED CORRECTION)
 	 *	Sensors read in Timer2 overflow interrupt
 	 *
 	 *		TCCR2 register:
@@ -122,23 +132,24 @@ snuffie::snuffie(){
 	 *	fOC2 = fclk_I/O / 2 / N / (1 + OCR2)
 	 *	Sensor scan period ~5ms = 200Hz
 	 *	fclk_I/O = 16MHz
-	 *	prescaler N = 256
+	 *	prescaler N = 1024
 	 *	OCR2 = 155
 	 *	fOC2 -> 200.32Hz
 	 *
-	 *	Prescaler N = 256
-	 *		CS22 = 1
-	 *		CS21, CS20 = 0
+	 *	Prescaler N = 1024
+	 *		CS22, CS20 = 1
+	 *		CS21 = 0
 	 *
 	 *		TIMSK register:
 	 *
 	 *	Timer2 Output Compare Match interrupt enable
 	 *		OCIE2 = 1
 	 */
-	TCCR2 |= (1<<WGM21) | (1<<CS22);
+	TCCR2 |= (1<<WGM21) | (1<<CS22) | (1<<CS20);
 	TIMSK |= (1<<OCIE2);
-	OCR2 = 155; //add here something to easy change scan freq
-
+#define SENSOR_SCAN_FREQUENCY 50
+	OCR2 = 16000000 / 1024 / 2 / SENSOR_SCAN_FREQUENCY - 1; //add here something to easy change scan freq
+#undef SENSOR_SCAN_FREQUENCY
 	/*
 	 *		Sensors factors init
 	 *	|-7|-6|-5|-4|-3|-2|-1|0|0|+1|+2|+3|+4|+5|+6|+7|
@@ -148,14 +159,56 @@ snuffie::snuffie(){
 		factor[8+i] = i;
 	}
 
-	factor[0] = -20; //temp
-	factor[15] = 20; //temp
+	factor[0] = -10; //temp
+	factor[15] = 10; //temp
 
 	/*
 	 * 		PID regulator values set
 	 * 	PID_P >= 1
 	 */
 	PIDreg_P = 35;
+
+	/*
+	 * 		UART init (NEED COMPLETION)
+	 *	Using UART0 - asynchronous operation
+	 *
+	 *		USCR0A register - not used for UART init
+	 *
+	 *		USCR0B register:
+	 *
+	 *	Receiver enable
+	 *		RXEN0 = 1
+	 *
+	 *	Transmitter enable
+	 *		TXEN0 = 1
+	 *
+	 *		USCR0C register:
+	 *
+	 *	Asynchronous operation
+	 *		UMSEL0 = 0
+	 *
+	 *	Parity mode disable
+	 *		UPM00, UPM01 = 0
+	 *
+	 *	2 stop bits
+	 *		USBS0 = 1
+	 *
+	 *	8-bit character size
+	 *		UCSZ00, UCSZ01 = 1
+	 *		UCSZ02 = 0 (USCR0B register)
+	 *
+	 *		UBRR0 register:
+	 *
+	 *	Baud rate = 9600
+	 *		UBRR0 = 103
+	 *
+	 *
+	 */
+	UCSR0B |= (1<<RXEN)|(1<<TXEN);
+	UCSR0C |= (1<<USBS)|(3<<UCSZ0);
+	UART_ubrr = 103;
+	UBRR0H = (unsigned char)(UART_ubrr>>8);
+	UBRR0L = (unsigned char)UART_ubrr;
 
 	/*
 	 * Global Interrupt Flag in SREG register set
@@ -214,19 +267,30 @@ snuffie::snuffie(){
 
 void snuffie::wait(){
 	while(1){
-
+		UART_monitor();
 	}
 }
 
 void snuffie::sensors_scan(){
+	seen_line = 0;
+
 	for(int i=0; i<8; i++){
-		sensor_status[i] = CHBI(PINA,i);
-		sensor_status[15-i] = CHBI(PINC,i);
+		new_sensor_status[i] = CHBI(PINA,i);
+		new_sensor_status[15-i] = CHBI(PINC,i);
+		if(seen_line == 0) seen_line = new_sensor_status[i] != 0 ? new_sensor_status[i] : new_sensor_status[15-i];
 	}
 }
 
-void snuffie::calculate_error(){
+void snuffie::calculate_speed(){
 	PID_error = 0;
+	int16_t PID_output = 0;
+
+	if(seen_line != 0){
+		for(int i=0; i<8; i++){
+			sensor_status[i] = new_sensor_status[i];
+			sensor_status[15-i] = new_sensor_status[15-i];
+		}
+	}
 	//uint8_t counter = 0;
 	for(int i=0; i<16; i++){
 		if(sensor_status[i] != 0){
@@ -236,10 +300,6 @@ void snuffie::calculate_error(){
 		}
 	}
 	//PID_error /= counter;
-}
-
-void snuffie::calculate_speed(){
-	int16_t PID_output = 0;
 
 	//P
 	PID_output += PIDreg_P * PID_error;
@@ -251,120 +311,51 @@ void snuffie::calculate_speed(){
 	left_motor_speed = 1023 + PID_output;
 	right_motor_speed = 1023 - PID_output;
 
-	//setting speed mode
-	if(left_motor_speed > 1023){
-		if(right_motor_speed >= 0){
-			speed_mode = 1;
-		}
-		else if(right_motor_speed >= -1023){
-			speed_mode = 2;
-		}
-		else if(right_motor_speed < -1023){
-			speed_mode = 3;
-		}
-	}
-	else if(left_motor_speed >= 0){
-		if(right_motor_speed > 1023){
-			speed_mode = 4;
-		}
-		else if(right_motor_speed >= 0){
-			speed_mode = 5;
-		}
-		else if(right_motor_speed >= -1023){
-			speed_mode = 6;
-		}
-		else if(right_motor_speed < -1023){
-			speed_mode = 7;
-		}
-	}
-	else if(left_motor_speed >= -1023){
-		if(right_motor_speed > 1023){
-			speed_mode = 8;
-		}
-		else if(right_motor_speed >= 0){
-			speed_mode = 9;
-		}
-		else if(right_motor_speed >= -1023){
-			speed_mode = 10;
-		}
-		else if(right_motor_speed < -1023){
-			speed_mode = 11;
-		}
-	}
-	else if(left_motor_speed < -1023){ //need 'else if'? maybe 'if' only?
-		if(right_motor_speed > 1023){
-			speed_mode = 12;
-		}
-		else if(right_motor_speed >= 0){
-			speed_mode = 13;
-		}
-		else if(right_motor_speed >= -1023){
-			speed_mode = 14;
-		}
-	}
-
-
-#if HALF_POWER
-	left_motor_speed = (left_motor_speed>>1);
-	right_motor_speed = (right_motor_speed>>1);
-#endif //HALF_POWER
-#if QUARTER_POWER
-	left_motor_speed = (left_motor_speed>>2);
-	right_motor_speed = (right_motor_speed>>2);
-#endif //QUARTER_POWER
+	#if HALF_POWER
+		left_motor_speed = (left_motor_speed>>1);
+		right_motor_speed = (right_motor_speed>>1);
+	#endif //HALF_POWER
+	#if QUARTER_POWER
+		left_motor_speed = (left_motor_speed>>2);
+		right_motor_speed = (right_motor_speed>>2);
+	#endif //QUARTER_POWER
 }
 
 void snuffie::set_motor_speed(){
 	uint16_t temp;
 	uint8_t new_left_dir, new_right_dir;
 
-	//Setting speed
-	switch(speed_mode){
-	case 1:
-
-		break;
-	case 2:
-
-		break;
-	case 3:
-
-		break;
-	case 4:
-
-		break;
-	case 5:
-
-		break;
-	case 6:
-
-		break;
-	case 7:
-
-		break;
-	case 8:
-
-		break;
-	case 9:
-
-		break;
-	case 10:
-
-		break;
-	case 11:
-
-		break;
-	case 12:
-
-		break;
-	case 13:
-
-		break;
-	case 14:
-
-		break;
+	//Speed values must stay in range of <-1023;1023>
+	if(left_motor_speed > 1023){
+		temp = left_motor_speed - 1023;
+		left_motor_speed = 1023;
+		right_motor_speed -= temp;
+		if(right_motor_speed < -1023) right_motor_speed = -1023;
+	}
+	else if(right_motor_speed > 1023){
+		temp = right_motor_speed - 1023;
+		right_motor_speed = 1023;
+		left_motor_speed -= temp;
+		if(left_motor_speed < -1023) left_motor_speed = -1023;
 	}
 
-	//Setting direction        FREE TRASH!
+	//
+	if(left_motor_speed >= 0) new_left_dir = FORWARD;
+	else{
+		left_motor_speed *= -1;
+		new_left_dir = BACKWARD;
+	}
+	if(right_motor_speed >= 0) new_right_dir = FORWARD;
+	else{
+		right_motor_speed *= -1;
+		new_right_dir = BACKWARD;
+	}
+
+	//Setting PWM values
+	OCR1A = left_motor_speed;
+	OCR1B = right_motor_speed;
+
+	//Changing directions in PORTB register        FREE TRASH!
 	if(left_motor_dir != new_left_dir){
 		PORTB ^= 0b00011000;
 		left_motor_dir = new_left_dir;
@@ -372,6 +363,81 @@ void snuffie::set_motor_speed(){
 	if(right_motor_dir != new_right_dir){
 		PORTB ^= 0b00000101;
 		left_motor_dir = new_right_dir;
+	}
+}
+
+void snuffie::UART_transmit_char(uint8_t char_to_transmit){
+	while(!(UCSR0A & (1<<UDRE0)));
+	UDR0 = char_to_transmit;
+}
+
+void snuffie::UART_transmit_string(uint8_t* string_to_transmit){
+	while(*string_to_transmit){
+		while(!(UCSR0A & (1<<UDRE0)));
+		UDR0 = *string_to_transmit++;
+	}
+}
+
+void snuffie::UART_transmit_number(int16_t number_to_transmit){
+	char number[6];
+	char *pnumber = &number[0];
+
+	itoa(number_to_transmit, pnumber, 10);
+	while(*pnumber){
+		while(!(UCSR0A & (1<<UDRE0)));
+		UDR0 = *pnumber++;
+	}
+}
+
+uint8_t snuffie::UART_receive_char(){
+	uint8_t incoming_char;
+
+	while(!(UCSR0A & (1<<RXC0)));
+	incoming_char = UDR0;
+	return incoming_char;
+}
+
+void snuffie::UART_receive_string(uint8_t* string_array){
+	uint8_t *pstring = string_array;
+
+	do{
+		while(!(UCSR0A & (1<<RXC0)));
+		*pstring = UDR0;
+	}while('\0' != *pstring++);
+}
+
+void snuffie::UART_monitor(){
+	uint8_t request_sign = UART_receive_char();
+
+	switch(request_sign){
+	case 'd': //prepare for incoming data
+		request_sign = UART_receive_char();
+		switch(request_sign){
+		case 'P':
+			uint8_t received_string[6];
+			UART_receive_string(received_string);
+			PIDreg_P = atoi((char*)received_string);
+			break;
+		case 'I':
+
+			break;
+		case 'D':
+
+			break;
+		}
+		break;
+	case 'l':
+		UART_transmit_number(left_motor_speed);
+		break;
+	case 'n': //name request
+		UART_transmit_string(name);
+		break;
+	case 'p': //
+		UART_transmit_number(PIDreg_P);
+		break;
+	case 'r': //
+		UART_transmit_number(right_motor_speed);
+		break;
 	}
 }
 

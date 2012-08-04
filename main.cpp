@@ -24,7 +24,6 @@ ISR(INT1_vect){
 	PORTB &= 0b01111111;
 }
 ISR(TIMER1_OVF_vect){
-	Snuffie.calculate_error();
 	Snuffie.calculate_speed();
 	Snuffie.set_motor_speed();
 	//OCR1A = 1023;
