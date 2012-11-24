@@ -28,6 +28,10 @@
 
 #include "snuffie.h"
 
+#define LED3 7 //Red LED
+#define LED2 6 //Green center LED
+#define LED1 5 //Green edge LED
+
 snuffie::snuffie(){
 	name[0] = 'S';
 	name[1] = 'n';
@@ -54,32 +58,6 @@ snuffie::snuffie(){
 	DDRB = 0b11111101;
 	DDRD = 0b11100000;
 	PORTD = 0b00000011;
-
-	/*
-	 *		Sensors factors init
-	 *	|-64|-32|-16|-8|-4|-2|-1|0||0|+1|+2|+4|+8|+16|+32|+64|
-	 */
-	/*factor[0] = -64;
-	factor[1] = -32;
-	factor[2] = -16;
-	factor[3] = -8;
-	factor[4] = -4;
-	factor[5] = -2;
-	factor[6] = -1;
-	factor[7] = 0;
-	factor[8] = 0;
-	factor[9] = 1;
-	factor[10] = 2;
-	factor[11] = 4;
-	factor[12] = 8;
-	factor[13] = 16;
-	factor[14] = 32;
-	factor[15] = 64;*/
-
-	for(int i=0;i<8;i++){
-			factor[i] = (-7+i);
-			factor[8+i] = i;
-		}
 
 	/*
 	 *		INT0..1 init
@@ -171,15 +149,23 @@ snuffie::snuffie(){
 	 */
 	TCCR2 |= (1<<WGM21) | (1<<CS22) | (1<<CS20);
 	TIMSK |= (1<<OCIE2);
-#define SENSOR_SCAN_FREQUENCY 100
+#define SENSOR_SCAN_FREQUENCY 50
 	OCR2 = 16000000 / 1024 / 2 / SENSOR_SCAN_FREQUENCY - 1; //add here something to easy change scan freq
 #undef SENSOR_SCAN_FREQUENCY
+	/*
+	 *		Sensors factors init
+	 *	|-7|-6|-5|-4|-3|-2|-1|0|0|+1|+2|+3|+4|+5|+6|+7|
+	 */
+	for(int i=0;i<8;i++){
+		factor[i] = (-7+i);
+		factor[8+i] = i;
+	}
 
 	/*
 	 * 		PID regulator values set
 	 * 	PID_P >= 1
 	 */
-	PIDreg_P = 30;
+	PIDreg_P = 100;
 
 	/*
 	 * 		UART init (NEED COMPLETION)
@@ -226,6 +212,12 @@ snuffie::snuffie(){
 #endif //DEBUG
 
 	/*
+	 * Global Interrupt Flag in SREG register set
+	 */
+	sei();
+
+	/*
+	 *
 	 * PORTB description
 	 * PB0 - AIN2
 	 * PB1 - SCK
@@ -269,11 +261,6 @@ snuffie::snuffie(){
 	right_motor_dir = FORWARD;
 
 	/*
-	 * Global Interrupt Flag in SREG register set
-	 */
-	sei();
-
-	/*
 	 * Wait for action after completing init
 	 */
 	wait();
@@ -286,33 +273,45 @@ void snuffie::wait(){
 }
 
 void snuffie::sensors_scan(){
-	is_line = 0;
-	//scan
-	for(int i=0; i<8; i++){
-		sensor_status[i] = CHBI(PINA,i);
-		sensor_status[15-i] = CHBI(PINC,i);
 
-		if(is_line == 0){
-			if(sensor_status[i] != 0) is_line = 1;
-			if(sensor_status[15-i] != 0) is_line = 1;
-		}
+
+	for(int i=0; i<8; i++){
+		//scan
+		new_sensor_status[i] = CHBI(PINA,i);
+		new_sensor_status[15-i] = CHBI(PINC,i);
+
+#if OLD
+		//if not yet seen the line
+		seen_line = 0;
+		if(seen_line == 0) seen_line = new_sensor_status[i] != 0 ? 1 : 0;
+		if(seen_line == 0) seen_line = new_sensor_status[15-i] != 0 ? 1 : 0;
+#endif //OLD
 	}
 }
 
 void snuffie::calculate_speed(){
-	if(is_line == 1){
-		PID_error = 0;
-		for(uint8_t i=0; i<16; i++)
-			if(sensor_status[i] != 0) PID_error += factor[i];
+	PID_error = 0;
+	int16_t PID_output = 0;
+
+	//new sensor scan to be used
+	if(seen_line != 0){
+		for(int i=0; i<8; i++){
+			sensor_status[i] = new_sensor_status[i];
+			sensor_status[15-i] = new_sensor_status[15-i];
+		}
 	}
-	else{ //is_line == 0
-		PID_error += PID_error;
-		if(PID_error > 2046) PID_error = 2046;
-		else if(PID_error < -2046) PID_error = -2046;
+	//uint8_t counter = 0;
+	for(int i=0; i<16; i++){
+		if(sensor_status[i] != 0){
+			PID_error += factor[i];
+			//HERE CAN ADD HOW MANY SENSORS SEE LINE
+			//counter++;
+		}
 	}
+	//PID_error /= counter;
 
 	//P
-	PID_output = PIDreg_P * PID_error;
+	PID_output += PIDreg_P * PID_error;
 	//I
 
 	//D
@@ -320,6 +319,15 @@ void snuffie::calculate_speed(){
 	//output
 	left_motor_speed = 1023 + PID_output;
 	right_motor_speed = 1023 - PID_output;
+
+#if HALF_POWER
+		left_motor_speed = (left_motor_speed>>1);
+		right_motor_speed = (right_motor_speed>>1);
+#endif //HALF_POWER
+#if QUARTER_POWER
+		left_motor_speed = (left_motor_speed>>2);
+		right_motor_speed = (right_motor_speed>>2);
+#endif //QUARTER_POWER
 }
 
 void snuffie::set_motor_speed(){
@@ -356,8 +364,7 @@ void snuffie::set_motor_speed(){
 	OCR1A = left_motor_speed;
 	OCR1B = right_motor_speed;
 
-
-	//Changing directions in PORTB register
+	//Changing directions in PORTB register        FREE TRASH!
 	if(left_motor_dir != new_left_dir){
 		PORTB ^= 0b00000101;
 		left_motor_dir = new_left_dir;
@@ -430,7 +437,6 @@ void snuffie::UART_monitor(){
 		}
 		break;
 	case 'l':
-		UART_transmit_char('L');
 		UART_transmit_number(left_motor_speed);
 		break;
 	case 'n': //name request
@@ -440,9 +446,7 @@ void snuffie::UART_monitor(){
 		UART_transmit_number(PIDreg_P);
 		break;
 	case 'r': //
-		UART_transmit_char('R');
 		UART_transmit_number(right_motor_speed);
-		UART_transmit_char(13);
 		break;
 	}
 }

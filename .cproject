@@ -52,6 +52,12 @@
 							<tool id="de.innot.avreclipse.tool.avrdude.app.release.944883535" name="AVRDude" superClass="de.innot.avreclipse.tool.avrdude.app.release"/>
 						</toolChain>
 					</folderInfo>
+					<fileInfo id="de.innot.avreclipse.configuration.app.release.1078106800.1801599976" name="old_snuffie.cpp" rcbsApplicability="disable" resourcePath="old_snuffie.cpp" toolsToInvoke="de.innot.avreclipse.tool.cppcompiler.app.release.1481477168.1273710187">
+						<tool id="de.innot.avreclipse.tool.cppcompiler.app.release.1481477168.1273710187" name="AVR C++ Compiler" superClass="de.innot.avreclipse.tool.cppcompiler.app.release.1481477168"/>
+					</fileInfo>
+					<sourceEntries>
+						<entry excluding="old_snuffie.cpp" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+					</sourceEntries>
 				</configuration>
 			</storageModule>
 			<storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
@@ -69,5 +75,10 @@
 			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="de.innot.avreclipse.core.AVRGCCManagedMakePerProjectProfileCPP"/>
 		</scannerConfigBuildInfo>
 	</storageModule>
-	<storageModule moduleId="refreshScope"/>
+	<storageModule moduleId="refreshScope" versionNumber="2">
+		<configuration configurationName="Release">
+			<resource resourceType="PROJECT" workspacePath="/snuffie"/>
+		</configuration>
+	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
 </cproject>

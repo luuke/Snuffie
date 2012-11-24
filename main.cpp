@@ -8,34 +8,29 @@
 #include <avr/io.h>
 #include "snuffie.h"
 
-/*
- * SENSORS
- * PA0..7 PC7..0
- */
-
 snuffie Snuffie; //don't know how to change data from interrupt -> made this global variable
 
 ISR(INT0_vect){
 	SBI(PORTD,7);
-	PORTB |= 0b10000000;
+	SBI(HBRIDGE_PORT, HBRIDGE_STBY);
 }
 ISR(INT1_vect){
 	CBI(PORTD,7);
-	PORTB &= 0b01111111;
+	CBI(HBRIDGE_PORT, HBRIDGE_STBY);
 }
 ISR(TIMER1_OVF_vect){
+	SBI(LED_PORT,GREEN_C_LED);
 	Snuffie.calculate_speed();
 	Snuffie.set_motor_speed();
-	//OCR1A = 1023;
-	//OCR1B = 1023;
+	CBI(LED_PORT,GREEN_C_LED);
 }
 ISR(TIMER2_COMP_vect){
+	SBI(LED_PORT,GREEN_E_LED);
 	Snuffie.sensors_scan();
+	CBI(LED_PORT,GREEN_E_LED);
 }
 
 int main(){
-	while(1){
-	}
-
+	while(1){}
 	return 0;
 }

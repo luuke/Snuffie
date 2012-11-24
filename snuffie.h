@@ -20,6 +20,19 @@
 #define TBI(reg,bit) reg^=1<<bit //toggle bit
 #define CHBI(reg,bit) reg&(1<<bit) //check bit
 
+#define RED_LED 7 //Red LED
+#define GREEN_C_LED 6 //Green center LED
+#define GREEN_E_LED 5 //Green edge LED
+#define LED_PORT PORTD
+
+#define HBRIDGE_PORT PORTB
+#define HBRIDGE_STBY 7
+
+/*
+ * debug mode = 1
+ */
+#define DEBUG 0
+
 /*
  * direction defines
  */
@@ -31,12 +44,12 @@
  * sensor status defines
  */
 #define SEE 1
-#define NSEE 0
+#define NOTSEE 0
 
 /*
  * engine power define
  */
-#define HALF_POWER 1
+#define HALF_POWER 0
 #define QUARTER_POWER 0
 
 #ifndef SNUFFIE_H_
@@ -44,12 +57,13 @@
 
 class snuffie{
 private:
-	volatile uint8_t sensor_status[16], new_sensor_status[16]; //TODO: change for 16bit bitfield -> easier to detect many unique cases by value of variable
+	volatile uint8_t sensor_status[16];
+	//volatile uint8_t new_sensor_status[16]; //TODO: change for 16bit bitfield -> easier to detect many unique cases by value of variable
+	volatile uint8_t is_line;
+	volatile uint8_t left_motor_dir, right_motor_dir;
+	volatile int16_t left_motor_speed, right_motor_speed;
+	volatile int16_t PID_error, PID_output;
 	int8_t factor[16];
-	int8_t seen_line;
-	uint8_t left_motor_dir, right_motor_dir;
-	int16_t left_motor_speed, right_motor_speed;
-	int16_t PID_error, PID_output;
 	uint8_t PIDreg_P;
 	uint8_t speed_mode;
 	uint8_t UART_ubrr;
@@ -60,7 +74,7 @@ public:
 	/*
 	 * Ride functions
 	 */
-	void sensors_scan(); //ready
+	void sensors_scan(); //
 	void calculate_speed(); //
 	void set_motor_speed(); //
 
@@ -73,7 +87,6 @@ public:
 	uint8_t UART_receive_char();
 	void UART_receive_string(uint8_t* string_array);
 	void UART_monitor();
-
 
 	void wait();
 	void test();
