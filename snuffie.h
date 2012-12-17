@@ -31,7 +31,7 @@
 /*
  * debug mode = 1
  */
-#define DEBUG 0
+#define DEBUG 1
 
 /*
  * direction defines
@@ -63,9 +63,11 @@ private:
 	volatile uint8_t left_motor_dir, right_motor_dir;
 	volatile int16_t left_motor_speed, right_motor_speed;
 	volatile int16_t PID_error, PID_output;
+	volatile int16_t last_PID_P;
 	int8_t factor[16];
-	uint8_t PIDreg_P;
-	uint8_t speed_mode;
+	uint8_t PIDreg_P, PIDreg_D;
+	volatile uint8_t power;
+	//uint8_t speed_mode;
 	uint8_t UART_ubrr;
 	uint8_t name[8];
 public:

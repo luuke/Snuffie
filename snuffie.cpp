@@ -59,7 +59,9 @@ snuffie::snuffie(){
 	 *		Sensors factors init
 	 *	|-64|-32|-16|-8|-4|-2|-1|0||0|+1|+2|+4|+8|+16|+32|+64|
 	 */
-	/*factor[0] = -64;
+
+	///*
+	factor[0] = -64;
 	factor[1] = -32;
 	factor[2] = -16;
 	factor[3] = -8;
@@ -74,12 +76,19 @@ snuffie::snuffie(){
 	factor[12] = 8;
 	factor[13] = 16;
 	factor[14] = 32;
-	factor[15] = 64;*/
+	factor[15] = 64;
+	//*/
 
+	/*
 	for(int i=0;i<8;i++){
-			factor[i] = (-7+i);
-			factor[8+i] = i;
-		}
+		factor[i] = 2*(-7+i);
+		factor[8+i] = 2*i;
+	}
+	//factor[0] *= 2;
+	//factor[1] *= 2;
+	//factor[14] *= 2;
+	// factor[15] *= 2;
+	*/
 
 	/*
 	 *		INT0..1 init
@@ -180,6 +189,7 @@ snuffie::snuffie(){
 	 * 	PID_P >= 1
 	 */
 	PIDreg_P = 30;
+	PIDreg_D = 1;
 
 	/*
 	 * 		UART init (NEED COMPLETION)
@@ -267,6 +277,8 @@ snuffie::snuffie(){
 	PORTB = 0b00010001;
 	left_motor_dir = FORWARD;
 	right_motor_dir = FORWARD;
+	power = 100;
+
 
 	/*
 	 * Global Interrupt Flag in SREG register set
@@ -281,7 +293,7 @@ snuffie::snuffie(){
 
 void snuffie::wait(){
 	while(1){
-		//UART_monitor();
+		UART_monitor();
 	}
 }
 
@@ -300,6 +312,7 @@ void snuffie::sensors_scan(){
 }
 
 void snuffie::calculate_speed(){
+	volatile int16_t temp_P, temp_D;
 	if(is_line == 1){
 		PID_error = 0;
 		for(uint8_t i=0; i<16; i++)
@@ -312,11 +325,14 @@ void snuffie::calculate_speed(){
 	}
 
 	//P
-	PID_output = PIDreg_P * PID_error;
+	temp_P = PIDreg_P * PID_error;
 	//I
 
 	//D
+	temp_D = PIDreg_D * (temp_P - last_PID_P);
 
+	last_PID_P = temp_P;
+	PID_output = temp_P + temp_D;
 	//output
 	left_motor_speed = 1023 + PID_output;
 	right_motor_speed = 1023 - PID_output;
@@ -353,8 +369,8 @@ void snuffie::set_motor_speed(){
 	}
 
 	//Setting PWM values
-	OCR1A = left_motor_speed;
-	OCR1B = right_motor_speed;
+	OCR1A = left_motor_speed / 100 * power;
+	OCR1B = right_motor_speed / 100 * power;
 
 
 	//Changing directions in PORTB register
@@ -410,39 +426,160 @@ void snuffie::UART_receive_string(uint8_t* string_array){
 }
 
 void snuffie::UART_monitor(){
+	uint8_t counter;
+
+	// OUTGOING LETTERS
+	// | Q | W | E | (R) | T | Y | U | I | O | P |
+	//   | A | S | D | F | G | H | J | K | L |
+	//     | Z | X | C | V | B | (N) | M |
+	//
+	// INCOMING LETTER
+	// | q | w | e | (r) | t | y | u | i | o | (p) |
+	//   | a | s | d | f | g | h | j | k | (l) |
+	//     | z | x | c | v | b | (n) | m |
+	//
+	// z - power up
+	// x - power down
+	// d - debug
+	// t - sensor check
 	uint8_t request_sign = UART_receive_char();
 
 	switch(request_sign){
-	case 'd': //prepare for incoming data
-		request_sign = UART_receive_char();
-		switch(request_sign){
-		case 'P':
-			uint8_t received_string[6];
-			UART_receive_string(received_string);
-			PIDreg_P = atoi((char*)received_string);
-			break;
-		case 'I':
-
-			break;
-		case 'D':
-
-			break;
-		}
+	case 'z':
+		power += 5;
+		UART_transmit_char('P');
+		UART_transmit_char('o');
+		UART_transmit_char('w');
+		UART_transmit_char('e');
+		UART_transmit_char('r');
+		UART_transmit_char(':');
+		UART_transmit_char(' ');
+		UART_transmit_number(power);
+		UART_transmit_char(13);
+		break;
+	case 'x':
+		power -= 5;
+		UART_transmit_char('P');
+		UART_transmit_char('o');
+		UART_transmit_char('w');
+		UART_transmit_char('e');
+		UART_transmit_char('r');
+		UART_transmit_char(':');
+		UART_transmit_char(' ');
+		UART_transmit_number(power);
+		UART_transmit_char(13);
+		break;
+	case 'a':
+		PIDreg_P++;
+		UART_transmit_char('R');
+		UART_transmit_char('e');
+		UART_transmit_char('g');
+		UART_transmit_char('_');
+		UART_transmit_char('P');
+		UART_transmit_char(':');
+		UART_transmit_char(' ');
+		UART_transmit_number(PIDreg_P);
+		UART_transmit_char(13);
+		break;
+	case 's':
+		PIDreg_P--;
+		UART_transmit_char('R');
+		UART_transmit_char('e');
+		UART_transmit_char('g');
+		UART_transmit_char('_');
+		UART_transmit_char('P');
+		UART_transmit_char(':');
+		UART_transmit_char(' ');
+		UART_transmit_number(PIDreg_P);
+		UART_transmit_char(13);
+		break;
+	case 'q':
+		PIDreg_D++;
+		UART_transmit_char('R');
+		UART_transmit_char('e');
+		UART_transmit_char('g');
+		UART_transmit_char('_');
+		UART_transmit_char('D');
+		UART_transmit_char(':');
+		UART_transmit_char(' ');
+		UART_transmit_number(PIDreg_D);
+		UART_transmit_char(13);
+		break;
+	case 'w':
+		PIDreg_D--;
+		UART_transmit_char('R');
+		UART_transmit_char('e');
+		UART_transmit_char('g');
+		UART_transmit_char('_');
+		UART_transmit_char('D');
+		UART_transmit_char(':');
+		UART_transmit_char(' ');
+		UART_transmit_number(PIDreg_D);
+		UART_transmit_char(13);
 		break;
 	case 'l':
 		UART_transmit_char('L');
 		UART_transmit_number(left_motor_speed);
+		UART_transmit_char(13);
 		break;
 	case 'n': //name request
+		UART_transmit_char('N');
 		UART_transmit_string(name);
+		UART_transmit_char(13);
 		break;
 	case 'p': //
+		UART_transmit_char('P');
 		UART_transmit_number(PIDreg_P);
+		UART_transmit_char(13);
 		break;
 	case 'r': //
 		UART_transmit_char('R');
 		UART_transmit_number(right_motor_speed);
 		UART_transmit_char(13);
+		break;
+	case 'g': //
+		SBI(HBRIDGE_PORT, HBRIDGE_STBY);
+		SBI(PORTD,7);
+		UART_transmit_char('G');
+		UART_transmit_char('O');
+		UART_transmit_char(13);
+		break;
+	case 'h': //
+		CBI(HBRIDGE_PORT, HBRIDGE_STBY);
+		CBI(PORTD,7);
+		UART_transmit_char('S');
+		UART_transmit_char('T');
+		UART_transmit_char('O');
+		UART_transmit_char('P');
+		UART_transmit_char(13);
+		break;
+	case 't':
+		counter = 0;
+		for(uint8_t i=0; i<16; i++){
+			if(sensor_status[i] != 0) counter++;
+		}
+		if(counter == 16){
+			UART_transmit_char('A');
+			UART_transmit_char('l');
+			UART_transmit_char('l');
+			UART_transmit_char('B');
+			UART_transmit_char('l');
+			UART_transmit_char('a');
+			UART_transmit_char('c');
+			UART_transmit_char('k');
+			UART_transmit_char(13);
+		}
+		else if(counter == 0){
+			UART_transmit_char('A');
+			UART_transmit_char('l');
+			UART_transmit_char('l');
+			UART_transmit_char('W');
+			UART_transmit_char('h');
+			UART_transmit_char('i');
+			UART_transmit_char('t');
+			UART_transmit_char('e');
+			UART_transmit_char(13);
+		}
 		break;
 	}
 }
